@@ -7,7 +7,7 @@ A comprehensive CLI tool for managing GitHub projects, leveraging Groq's AI mode
 1. Clone the repository:
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Optimus-Labs/github-project-assistant
 cd github-project-assistant
 ```
 
