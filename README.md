@@ -39,6 +39,81 @@ gpa commit --preview
 gpa commit -m "feat: add new feature"
 ```
 
+### Code Review Assistant
+
+Analyze and review pull requests with AI-powered insights:
+
+```bash
+# Analyze a pull request
+gpa review analyze 123
+
+# Analyze with simple explanation
+gpa review analyze 123 --explain
+
+# Generate specific review comments
+gpa review analyze 123 --comments
+
+# Analyze and merge a pull request
+gpa review merge 123
+
+# Merge with specific method
+gpa review merge 123 --method rebase
+
+# Merge without analysis
+gpa review merge 123 --no-analyze
+```
+
+#### Code Review Features:
+
+1. **Comprehensive Analysis**
+
+   - Code quality assessment
+   - Potential bugs and issues
+   - Performance considerations
+   - Security implications
+   - Best practices evaluation
+
+2. **Simple Explanations**
+
+   - Non-technical summaries of changes
+   - Impact analysis
+   - Functionality changes
+   - Business value assessment
+
+3. **Review Comments**
+
+   - Specific, actionable feedback
+   - Location-based suggestions
+   - Implementation recommendations
+   - Best practice guidance
+
+4. **Merge Assistance**
+   - Pre-merge analysis
+   - Conflict detection
+   - Multiple merge methods
+   - Safety checks
+
+#### Best Practices for Code Reviews
+
+1. **Before Review:**
+
+   - Ensure CI checks have passed
+   - Verify PR description is complete
+   - Check for merge conflicts
+
+2. **During Review:**
+
+   - Start with the AI analysis
+   - Review simple explanation for context
+   - Consider generated comments
+   - Verify suggestions manually
+
+3. **Before Merging:**
+   - Run analysis with `--analyze`
+   - Choose appropriate merge method
+   - Verify mergeable status
+   - Review final changes
+
 ### Pull Request Management
 
 Create pull requests with AI-generated descriptions based on your commits:
