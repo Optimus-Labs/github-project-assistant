@@ -407,3 +407,90 @@ Format each comment as a constructive suggestion."""
                     "recommendation": "Check your Groq API configuration and try again",
                 }
             ]
+
+    async def generate_readme(self, project_files: dict, git_info: dict) -> str:
+        """Generate a comprehensive README based on project structure and git info."""
+        project_summary = "\n".join(
+            [f"{path}:\n{content[:200]}..." for path, content in project_files.items()]
+        )
+
+        prompt = f"""Generate a comprehensive README.md for the following project:
+
+Project Files:
+{project_summary}
+
+Git Info:
+{git_info}
+
+Create a README that includes:
+1. Project title and description
+2. Installation instructions
+3. Usage examples
+4. Configuration details
+5. Main features
+6. Development setup
+7. Contributing guidelines
+8. License information
+
+Use clear markdown formatting with appropriate sections."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=2000,
+        )
+        return response.choices[0].message.content.strip()
+
+    async def suggest_doc_improvements(
+        self, current_docs: str, code_changes: str
+    ) -> str:
+        """Suggest documentation improvements based on code changes."""
+        prompt = f"""Analyze the following code changes and current documentation:
+
+Current Documentation:
+{current_docs}
+
+Code Changes:
+{code_changes}
+
+Suggest documentation improvements including:
+1. Missing documentation
+2. Outdated sections
+3. Clarity improvements
+4. Additional examples needed
+5. Technical accuracy updates
+
+Provide specific suggestions with markdown formatting."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=1000,
+        )
+        return response.choices[0].message.content.strip()
+
+    async def generate_code_docs(self, code: str, style: str = "google") -> str:
+        """Generate code documentation in specified style."""
+        prompt = f"""Generate documentation for the following code using {style} style:
+
+{code}
+
+Include:
+1. Function/class purpose
+2. Parameters
+3. Return values
+4. Exceptions
+5. Usage examples
+6. Important notes
+
+Follow {style} documentation style guide strictly."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=1000,
+        )
+        return response.choices[0].message.content.strip()
