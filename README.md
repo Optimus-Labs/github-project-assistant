@@ -206,6 +206,87 @@ gpa issue label 123 --no-preview
    - Use labels for better organization
    - Review suggested labels before applying
 
+### Documentation Helper
+
+Automatically generate and improve project documentation:
+
+```bash
+# Generate or update README
+gpa docs readme
+
+# Preview README without saving
+gpa docs readme --preview
+
+# Save README to custom location
+gpa docs readme --output ./docs/README.md
+
+# Get documentation improvement suggestions
+gpa docs suggest ./docs/api.md
+
+# Suggest improvements based on specific changes
+gpa docs suggest ./docs/api.md --diff changes.diff
+
+# Generate code documentation
+gpa docs generate ./src/module.py
+
+# Generate with specific style
+gpa docs generate ./src/module.py --style numpy
+
+# Preview code documentation
+gpa docs generate ./src/module.py --preview
+```
+
+#### Documentation Features:
+
+1. **README Generation**
+
+   - Project structure analysis
+   - Automatic section organization
+   - Installation instructions
+   - Usage examples
+   - Feature documentation
+
+2. **Documentation Improvements**
+
+   - Change-based suggestions
+   - Missing documentation detection
+   - Clarity improvements
+   - Example suggestions
+   - Technical accuracy checks
+
+3. **Code Documentation**
+   - Multiple documentation styles
+   - Function and class documentation
+   - Parameter descriptions
+   - Return value documentation
+   - Usage examples
+   - Exception documentation
+
+#### Best Practices for Documentation
+
+1. **README Management:**
+
+   - Preview before saving
+   - Keep installation steps updated
+   - Include all configuration options
+   - Maintain clear examples
+   - Regular updates with changes
+
+2. **Documentation Updates:**
+
+   - Review suggestions regularly
+   - Update with code changes
+   - Maintain consistency
+   - Include practical examples
+   - Verify technical accuracy
+
+3. **Code Documentation:**
+   - Choose appropriate style
+   - Document all parameters
+   - Include return values
+   - Add usage examples
+   - Note important exceptions
+
 ## Development
 
 To set up the development environment:
