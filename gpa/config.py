@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class Config:
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     github_token: str = os.getenv("GITHUB_TOKEN", "")
-    default_model: str = "llama3-8b-8192"
+    default_model: str = "llama-3.2-90b-vision-preview"
 
 
 config = Config()
