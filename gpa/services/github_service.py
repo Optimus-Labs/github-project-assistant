@@ -52,3 +52,26 @@ class GitHubService:
             if commit.author:
                 contributors.add(commit.author.login)
         return list(contributors)
+
+    def create_issue(self, title: str, body: str, labels: List[str] = None) -> str:
+        """Create a new issue with the given title, body, and labels."""
+        issue = self.repo.create_issue(title=title, body=body, labels=labels)
+        return issue.html_url
+
+    def get_issues(self, state: str = "open", labels: List[str] = None) -> List[dict]:
+        """Get repository issues with optional filters."""
+        issues = self.repo.get_issues(state=state, labels=labels)
+        return [
+            {
+                "number": issue.number,
+                "title": issue.title,
+                "body": issue.body,
+                "labels": [label.name for label in issue.labels],
+            }
+            for issue in issues
+        ]
+
+    def add_issue_labels(self, issue_number: int, labels: List[str]) -> None:
+        """Add labels to an existing issue."""
+        issue = self.repo.get_issue(issue_number)
+        issue.add_to_labels(*labels)

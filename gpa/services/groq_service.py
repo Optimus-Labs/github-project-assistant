@@ -42,7 +42,6 @@ Guidelines:
 
     async def generate_pr_description(self, commits: List[str], diff: str) -> str:
         """Generate a PR description based on commits and changes."""
-        # Join commits with newline before creating f-string
         commits_str = "\n".join(commits)
 
         prompt = f"""Generate a comprehensive pull request description based on the following commits and changes:
@@ -83,5 +82,83 @@ Changes:
             model=config.default_model,
             temperature=0.7,
             max_tokens=300,
+        )
+        return response.choices[0].message.content.strip()
+
+    async def generate_issue_description(self, context: str, title: str) -> str:
+        """Generate an issue description based on code context."""
+        prompt = f"""Generate a comprehensive issue description based on the following context and title:
+
+Title: {title}
+
+Context:
+{context}
+
+Create a detailed issue description that includes:
+- Problem statement/Feature request
+- Expected behavior
+- Technical context
+- Potential implementation steps
+- Any dependencies or prerequisites
+
+Use markdown formatting for better readability."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=500,
+        )
+        return response.choices[0].message.content.strip()
+
+    async def suggest_issue_labels(self, title: str, description: str) -> List[str]:
+        """Suggest appropriate labels for an issue."""
+        prompt = f"""Based on the following issue title and description, suggest appropriate GitHub labels.
+Consider common label categories like:
+- Type (bug, feature, enhancement, documentation)
+- Priority (high, medium, low)
+- Status (ready for review, needs investigation)
+- Component (frontend, backend, api, etc.)
+
+Title: {title}
+Description: {description}
+
+Return only the label names, one per line."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=150,
+        )
+        return [
+            label.strip()
+            for label in response.choices[0].message.content.split("\n")
+            if label.strip()
+        ]
+
+    async def categorize_issues(self, issues: List[dict]) -> str:
+        """Categorize and summarize a list of issues."""
+        issues_text = "\n".join(
+            [f"#{issue['number']} - {issue['title']}" for issue in issues]
+        )
+
+        prompt = f"""Analyze and categorize the following GitHub issues:
+
+{issues_text}
+
+Provide a summary that:
+1. Groups issues by type/theme
+2. Highlights priority items
+3. Identifies related issues
+4. Suggests possible milestones
+
+Use markdown formatting for the summary."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=1000,
         )
         return response.choices[0].message.content.strip()
