@@ -132,6 +132,38 @@ gpa pr create --title "Feature: Add authentication system"
 gpa pr create --base main
 ```
 
+### GPA Scan
+
+```bash
+# Basic scan
+gpa scan run --repo "your-username/your-repo-name"
+
+# Scan with specific category (e.g., security)
+gpa scan run --repo "your-username/your-repo-name" --category security
+
+# Output results in JSON format
+gpa scan run --repo "your-username/your-repo-name" --output json
+```
+
+#### Scan Categories and Features
+
+1. **Security Checks**
+
+   - Detects vulnerabilities such as SQL injections, XSS, insecure data handling, and more.
+
+2. **Code Quality**
+
+   - Identifies code duplication, anti-patterns, unmaintainable code, and error handling issues.
+
+3. **Data Safety**
+   - Flags exposed credentials, sensitive data, and insecure configurations.
+
+#### Example Usage:
+
+- **Basic Scan**: Run a quick scan on your repository.
+- **Category Filter**: Focus on specific categories like security or quality.
+- **Detailed Output**: Generate structured JSON output for custom integrations.
+
 #### PR Creation Process:
 
 1. Ensure your changes are committed and pushed to your branch
