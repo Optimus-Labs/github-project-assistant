@@ -5,6 +5,7 @@ from . import __version__
 from .commands.commit import commit_command
 from .commands.pr import app as pr_app
 from .commands.issue import app as issue_app
+from .commands.review import app as review_app
 
 app = typer.Typer(
     help="GitHub Project Assistant (GPA) - A CLI tool for managing GitHub projects",
@@ -32,6 +33,7 @@ def main(
 app.command(name="commit")(commit_command)
 app.add_typer(pr_app, name="pr", help="Manage pull requests")
 app.add_typer(issue_app, name="issue", help="Manage repository issues")
+app.add_typer(review_app, name="review", help="Review and analyze pull requests")
 
 if __name__ == "__main__":
     app()

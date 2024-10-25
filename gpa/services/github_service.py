@@ -75,3 +75,33 @@ class GitHubService:
         """Add labels to an existing issue."""
         issue = self.repo.get_issue(issue_number)
         issue.add_to_labels(*labels)
+
+    def get_pull_request(self, pr_number: int) -> dict:
+        """Get pull request details including diff."""
+        pr = self.repo.get_pull(pr_number)
+        return {
+            "number": pr.number,
+            "title": pr.title,
+            "body": pr.body,
+            "diff": pr.get_files(),
+            "base": pr.base.ref,
+            "head": pr.head.ref,
+            "mergeable": pr.mergeable,
+        }
+
+    def add_review_comment(
+        self, pr_number: int, comment: str, commit_id: str, path: str, position: int
+    ) -> None:
+        """Add a review comment to specific line in PR."""
+        pr = self.repo.get_pull(pr_number)
+        pr.create_review_comment(
+            body=comment, commit_id=commit_id, path=path, position=position
+        )
+
+    def merge_pull_request(self, pr_number: int, merge_method: str = "squash") -> bool:
+        """Merge a pull request using specified method."""
+        pr = self.repo.get_pull(pr_number)
+        if pr.mergeable:
+            pr.merge(merge_method=merge_method)
+            return True
+        return False

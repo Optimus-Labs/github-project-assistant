@@ -162,3 +162,90 @@ Use markdown formatting for the summary."""
             max_tokens=1000,
         )
         return response.choices[0].message.content.strip()
+
+    async def analyze_code_changes(self, diff: str, files_content: dict) -> str:
+        """Analyze code changes and suggest improvements."""
+        prompt = f"""Analyze the following code changes and provide a detailed review:
+
+Diff:
+{diff}
+
+Full files content:
+{files_content}
+
+Provide analysis including:
+1. Code quality assessment
+2. Potential bugs or issues
+3. Performance considerations
+4. Security implications
+5. Suggested improvements
+6. Best practices violations
+7. Documentation needs
+
+Format the response in markdown with clear sections."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=1500,
+        )
+        return response.choices[0].message.content.strip()
+
+    async def explain_changes(self, diff: str) -> str:
+        """Explain code changes in simple terms."""
+        prompt = f"""Explain the following code changes in simple, non-technical terms:
+
+{diff}
+
+Focus on:
+1. What changed
+2. Why it matters
+3. Impact on functionality
+4. Benefits of the changes
+
+Use clear, concise language suitable for non-technical stakeholders."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=500,
+        )
+        return response.choices[0].message.content.strip()
+
+    async def generate_review_comments(self, diff: str) -> List[dict]:
+        """Generate specific review comments for code changes."""
+        prompt = f"""Review the following code changes and generate specific, actionable review comments:
+
+{diff}
+
+For each issue found, provide:
+1. The specific location/context
+2. What the issue is
+3. Why it's important
+4. How to fix it
+
+Format each comment as a constructive suggestion."""
+
+        response = self.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=config.default_model,
+            temperature=0.7,
+            max_tokens=1000,
+        )
+
+        # Parse the response into structured comments
+        comments_text = response.choices[0].message.content.strip()
+        comments = []
+        for comment in comments_text.split("\n\n"):
+            if comment.strip():
+                comments.append(
+                    {
+                        "content": comment,
+                        "type": "suggestion"
+                        if "suggestion" in comment.lower()
+                        else "issue",
+                    }
+                )
+        return comments
