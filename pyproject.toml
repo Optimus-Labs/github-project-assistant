@@ -3,19 +3,18 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gpa"  # Changed from github-project-assistant to gpa
+name = "gpa" # Changed from github-project-assistant to gpa
 version = "0.1.0"
-authors = [
-    { name = "Your Name", email = "your.email@example.com" },
-]
+authors = [{ name = "Your Name", email = "your.email@example.com" }]
 description = "GitHub Project Assistant (GPA) - A CLI tool for managing GitHub projects"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "groq>=0.4.0",
-    "GitPython>=3.1.0",
+  "typer>=0.9.0",
+  "rich>=13.0.0",
+  "groq>=0.4.0",
+  "GitPython>=3.1.0",
+  "PyGithub>=2.1.1",
 ]
 
 [project.scripts]
