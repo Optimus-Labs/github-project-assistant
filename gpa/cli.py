@@ -7,6 +7,7 @@ from .commands.pr import app as pr_app
 from .commands.issue import app as issue_app
 from .commands.review import app as review_app
 from .commands.docs import app as docs_app
+from .commands.scan import app as scan_app
 
 app = typer.Typer(
     help="GitHub Project Assistant (GPA) - A CLI tool for managing GitHub projects",
@@ -36,6 +37,7 @@ app.add_typer(pr_app, name="pr", help="Manage pull requests")
 app.add_typer(issue_app, name="issue", help="Manage repository issues")
 app.add_typer(review_app, name="review", help="Review and analyze pull requests")
 app.add_typer(docs_app, name="docs", help="Documentation maanagement tools")
+app.add_typer(scan_app, name="scan", help="Scan the repo")
 
 if __name__ == "__main__":
     app()

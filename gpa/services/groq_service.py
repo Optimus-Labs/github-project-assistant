@@ -1,6 +1,7 @@
 from groq import Groq
-from typing import List, Optional
+from typing import List, Dict, Optional
 from ..config import config
+import json
 
 
 class GroqService:
@@ -250,89 +251,159 @@ Format each comment as a constructive suggestion."""
                 )
         return comments
 
-    async def generate_readme(self, project_files: dict, git_info: dict) -> str:
-        """Generate a comprehensive README based on project structure and git info."""
-        project_summary = "\n".join(
-            [f"{path}:\n{content[:200]}..." for path, content in project_files.items()]
-        )
+    async def generate_scanned_result(self, repo_info: Dict) -> List[Dict]:
+        """Generate a comprehensive report based on the scanned results."""
 
-        prompt = f"""Generate a comprehensive README.md for the following project:
+        # Prepare a more structured prompt
+        prompt = """You are a code analysis expert. Analyze the provided repository information for potential issues and vulnerabilities.
+        Examine each file's content and commit history for:
 
-Project Files:
-{project_summary}
+        1. Code Security:
+           - Security vulnerabilities (e.g., SQL injection, XSS)
+           - Insecure data handling
+           - Authentication/authorization issues
+           - Unsafe dependencies
 
-Git Info:
-{git_info}
+        2. Code Quality:
+           - Anti-patterns
+           - Code duplication
+           - Complex/unmaintainable code
+           - Poor error handling
+           - Performance bottlenecks
 
-Create a README that includes:
-1. Project title and description
-2. Installation instructions
-3. Usage examples
-4. Configuration details
-5. Main features
-6. Development setup
-7. Contributing guidelines
-8. License information
+        3. Data Safety:
+           - Exposed credentials
+           - API keys or tokens
+           - Sensitive data in code
+           - Insecure configurations
 
-Use clear markdown formatting with appropriate sections."""
+        For each issue found, return a JSON object in this exact format:
+        {
+            "findings": [
+                {
+                    "severity": "Critical/High/Medium/Low",
+                    "category": "Security/Quality/Data",
+                    "description": "Clear description of the issue",
+                    "location": "Specific file path or location",
+                    "recommendation": "Specific steps to fix the issue"
+                }
+            ]
+        }
 
-        response = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=config.default_model,
-            temperature=0.7,
-            max_tokens=2000,
-        )
-        return response.choices[0].message.content.strip()
+        Repository Information:
+        """
 
-    async def suggest_doc_improvements(
-        self, current_docs: str, code_changes: str
-    ) -> str:
-        """Suggest documentation improvements based on code changes."""
-        prompt = f"""Analyze the following code changes and current documentation:
+        # Add relevant repo info while keeping prompt size manageable
+        filtered_repo_info = {
+            "metadata": repo_info.get("repo_metadata", {}),
+            "files": [
+                {
+                    "path": f.get("path"),
+                    "content": f.get("content")[:1000],  # Limit content size
+                    "last_modified": f.get("last_modified"),
+                }
+                for f in repo_info.get("files", [])
+            ],
+            "recent_commits": repo_info.get("commit_history", [])[:5],  # Last 5 commits
+        }
 
-Current Documentation:
-{current_docs}
+        prompt += json.dumps(filtered_repo_info, indent=2)
 
-Code Changes:
-{code_changes}
+        try:
+            response = self.client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model=config.default_model,
+                temperature=0.7,
+                max_tokens=2000,
+            )
 
-Suggest documentation improvements including:
-1. Missing documentation
-2. Outdated sections
-3. Clarity improvements
-4. Additional examples needed
-5. Technical accuracy updates
+            response_text = response.choices[0].message.content.strip()
 
-Provide specific suggestions with markdown formatting."""
+            # Try to extract JSON from the response
+            try:
+                # First try to parse the entire response as JSON
+                result = json.loads(response_text)
 
-        response = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=config.default_model,
-            temperature=0.7,
-            max_tokens=1000,
-        )
-        return response.choices[0].message.content.strip()
+                # Ensure we have the expected structure
+                if isinstance(result, dict) and "findings" in result:
+                    findings = result["findings"]
+                elif isinstance(result, list):
+                    findings = result
+                else:
+                    findings = [result]
 
-    async def generate_code_docs(self, code: str, style: str = "google") -> str:
-        """Generate code documentation in specified style."""
-        prompt = f"""Generate documentation for the following code using {style} style:
+            except json.JSONDecodeError:
+                # If that fails, try to find JSON-like structure in the text
+                import re
 
-{code}
+                json_match = re.search(r"\{[\s\S]*\}|\[[\s\S]*\]", response_text)
 
-Include:
-1. Function/class purpose
-2. Parameters
-3. Return values
-4. Exceptions
-5. Usage examples
-6. Important notes
+                if json_match:
+                    try:
+                        result = json.loads(json_match.group())
+                        if isinstance(result, dict) and "findings" in result:
+                            findings = result["findings"]
+                        elif isinstance(result, list):
+                            findings = result
+                        else:
+                            findings = [result]
+                    except:
+                        # If JSON parsing fails, create a structured finding about the issue
+                        findings = [
+                            {
+                                "severity": "Medium",
+                                "category": "Quality",
+                                "description": "Code analysis completed with parsing issues",
+                                "location": "Repository-wide",
+                                "recommendation": "Review the codebase manually or try scanning specific directories",
+                            }
+                        ]
+                else:
+                    # Create findings from text analysis if no JSON structure found
+                    findings = [
+                        {
+                            "severity": "Medium",
+                            "category": "Quality",
+                            "description": "Code analysis completed but structured results unavailable",
+                            "location": "Repository-wide",
+                            "recommendation": "Try scanning with different parameters or review specific files",
+                        }
+                    ]
 
-Follow {style} documentation style guide strictly."""
+            # Validate and clean findings
+            cleaned_findings = []
+            for finding in findings:
+                if isinstance(finding, dict):
+                    cleaned_finding = {
+                        "severity": finding.get("severity", "Medium"),
+                        "category": finding.get("category", "Quality"),
+                        "description": finding.get(
+                            "description", "No description provided"
+                        ),
+                        "location": finding.get("location", "Unknown"),
+                        "recommendation": finding.get(
+                            "recommendation", "No recommendation provided"
+                        ),
+                    }
+                    cleaned_findings.append(cleaned_finding)
 
-        response = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=config.default_model,
-            temperature=0.7,
-            max_tokens=1000,
-        )
-        return response.choices[0].message.content.strip()
+            return cleaned_findings or [
+                {
+                    "severity": "Low",
+                    "category": "Info",
+                    "description": "No significant issues found",
+                    "location": "Repository-wide",
+                    "recommendation": "Continue monitoring and following best practices",
+                }
+            ]
+
+        except Exception as e:
+            return [
+                {
+                    "severity": "High",
+                    "category": "Error",
+                    "description": f"Analysis error: {str(e)}",
+                    "location": "N/A",
+                    "recommendation": "Check your Groq API configuration and try again",
+                }
+            ]
