@@ -14,11 +14,36 @@ app = typer.Typer()
 console = Console()
 
 
+# Utility functions for consistent message formatting
+def print_warning(message: str) -> None:
+    """Print a warning message in yellow"""
+    console.print(f"[yellow]WARNING:[/yellow] {message}")
+
+
+def print_error(message: str) -> None:
+    """Print an error message in red"""
+    console.print(f"[red]ERROR:[/red] {message}")
+
+
+def print_success(message: str) -> None:
+    """Print a success message in green"""
+    console.print(f"[green]SUCCESS:[/green] {message}")
+
+
+def print_info(message: str) -> None:
+    """Print an info message in blue"""
+    console.print(f"[blue]INFO:[/blue] {message}")
+
+
 class RepoScanner:
     def __init__(
-        self, github_token: Optional[str] = None, repo_name: Optional[str] = None
+        self,
+        github_token: Optional[str] = None,
+        repo_name: Optional[str] = None,
+        max_file_size: int = 100000,  # 100KB default max file size
+        max_files_per_batch: int = 5,  # Process 5 files per batch
+        file_extensions: List[str] = None,  # Filterable file extensions
     ):
-        # Try to get token from parameter, then environment, then config
         self.github_token = (
             github_token or os.getenv("GITHUB_TOKEN") or config.github_token
         )
@@ -30,162 +55,195 @@ class RepoScanner:
         self.github = Github(self.github_token)
         self.repo_name = repo_name
         self.console = Console()
+        self.max_file_size = max_file_size
+        self.max_files_per_batch = max_files_per_batch
+        self.file_extensions = file_extensions or [
+            ".py",
+            ".js",
+            ".ts",
+            ".java",
+            ".cpp",
+            ".c",
+            ".h",
+            ".hpp",
+            ".cs",
+            ".go",
+            ".rb",
+            ".php",
+            ".swift",
+            ".kt",
+            ".rs",
+        ]
 
-    async def get_repo_info(self) -> Dict:
-        """Gather repository information using PyGithub"""
+    def is_analyzable_file(self, file_path: str, file_size: int) -> bool:
+        """Check if file should be included in analysis"""
+        if file_size > self.max_file_size:
+            return False
+
+        extension = os.path.splitext(file_path)[1].lower()
+        if not extension or extension not in self.file_extensions:
+            return False
+
+        return True
+
+    async def get_repo_files(self) -> List[Dict]:
+        """Gather repository files in batches"""
         try:
-            repo_info = {"files": [], "commit_history": [], "repo_metadata": {}}
-
-            # Get repository
             repo = self.github.get_repo(self.repo_name)
-
-            # Add repository metadata
-            repo_info["repo_metadata"] = {
-                "name": repo.name,
-                "description": repo.description,
-                "default_branch": repo.default_branch,
-                "language": repo.language,
-                "created_at": repo.created_at.isoformat(),
-                "last_updated": repo.updated_at.isoformat(),
-            }
-
-            # Get default branch
-            default_branch = repo.default_branch
-
-            # Get all files in repository
             contents = repo.get_contents("")
-            while contents:
-                file_content = contents.pop(0)
-                if file_content.type == "dir":
-                    try:
-                        contents.extend(repo.get_contents(file_content.path))
-                    except GithubException as e:
-                        print_warning(
-                            f"Skipping directory {file_content.path}: {str(e)}"
-                        )
-                        continue
+            all_files = []
 
-                elif file_content.type == "file":
-                    try:
-                        # Skip binary files and large files
-                        if any(
-                            file_content.path.endswith(ext)
-                            for ext in [".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip"]
+            with Progress() as progress:
+                scan_task = progress.add_task(
+                    "[cyan]Scanning repository...", total=None
+                )
+
+                while contents:
+                    file_content = contents.pop(0)
+                    if file_content.type == "dir":
+                        try:
+                            contents.extend(repo.get_contents(file_content.path))
+                        except GithubException as e:
+                            print_warning(
+                                f"Skipping directory {file_content.path}: {str(e)}"
+                            )
+                            continue
+
+                    elif file_content.type == "file":
+                        if not self.is_analyzable_file(
+                            file_content.path, file_content.size
                         ):
                             continue
 
-                        if file_content.size > 1000000:  # Skip files larger than 1MB
-                            print_warning(f"Skipping large file {file_content.path}")
-                            continue
-
-                        # Get file content
-                        file_data = base64.b64decode(file_content.content).decode(
-                            "utf-8"
-                        )
-
-                        # Get recent commits for this file
-                        commits = repo.get_commits(
-                            path=file_content.path, sha=default_branch
-                        )
-                        commit_info = []
-
-                        for commit in list(commits)[
-                            :3
-                        ]:  # Get last 3 commits for the file
-                            commit_info.append(
+                        try:
+                            file_data = base64.b64decode(file_content.content).decode(
+                                "utf-8"
+                            )
+                            all_files.append(
                                 {
-                                    "sha": commit.sha,
-                                    "message": commit.commit.message,
-                                    "author": commit.commit.author.name,
-                                    "date": commit.commit.author.date.isoformat(),
+                                    "path": file_content.path,
+                                    "content": file_data,
+                                    "size": file_content.size,
                                 }
                             )
+                            print_info(f"Added file: {file_content.path}")
+                        except (GithubException, UnicodeDecodeError) as e:
+                            print_warning(
+                                f"Skipping file {file_content.path}: {str(e)}"
+                            )
+                            continue
 
-                        repo_info["files"].append(
-                            {
-                                "path": file_content.path,
-                                "content": file_data,
-                                "size": file_content.size,
-                                "last_modified": file_content.last_modified,
-                                "commits": commit_info,
-                            }
-                        )
+                progress.update(scan_task, completed=100)
 
-                    except (GithubException, UnicodeDecodeError) as e:
-                        print_warning(f"Skipping file {file_content.path}: {str(e)}")
-                        continue
-
-            # Get recent commits
-            commits = repo.get_commits()
-            for commit in commits[:10]:  # Get last 10 commits
-                repo_info["commit_history"].append(
-                    {
-                        "sha": commit.sha,
-                        "message": commit.commit.message,
-                        "author": commit.commit.author.name,
-                        "date": commit.commit.author.date.isoformat(),
-                    }
-                )
-
-            return repo_info
+            print_success(f"Found {len(all_files)} analyzable files")
+            return all_files
 
         except Exception as e:
-            raise Exception(f"Failed to gather repository information: {str(e)}")
+            raise Exception(f"Failed to gather repository files: {str(e)}")
 
-    async def analyze_repo(self, repo_info: Dict) -> List[Dict]:
-        """Analyze repository and return findings"""
+    def chunk_files(self, files: List[Dict]) -> List[List[Dict]]:
+        """Split files into smaller batches"""
+        return [
+            files[i : i + self.max_files_per_batch]
+            for i in range(0, len(files), self.max_files_per_batch)
+        ]
+
+    async def analyze_batch(self, file_batch: List[Dict]) -> List[Dict]:
+        """Analyze a batch of files"""
         try:
-            # Create analysis using Groq service
             groq_service = GroqService()
-            response = await groq_service.generate_scanned_result(repo_info)
 
-            # Parse the response
-            try:
-                if isinstance(response, str):
-                    # Try to find a JSON-like structure in the response
-                    import re
+            # Create a simplified context for this batch
+            batch_context = {
+                "files": file_batch,
+                "repo_metadata": {
+                    "name": self.repo_name,
+                    "analyzed_files": len(file_batch),
+                },
+            }
 
-                    json_str = re.search(r"\[.*\]|\{.*\}", response.replace("\n", ""))
-                    if json_str:
-                        findings = eval(json_str.group())
-                    else:
-                        raise ValueError("No valid JSON structure found in response")
-                else:
-                    findings = response
+            response = await groq_service.generate_scanned_result(batch_context)
 
-                if not isinstance(findings, (list, dict)):
-                    raise ValueError("Response is neither a list nor a dict")
-
-                # Convert to list if it's a dict
-                if isinstance(findings, dict):
-                    findings = [findings]
-
-                # Validate each finding has required fields
-                for finding in findings:
-                    required_fields = [
-                        "severity",
-                        "category",
-                        "description",
-                        "location",
-                        "recommendation",
-                    ]
-                    for field in required_fields:
-                        if field not in finding:
-                            finding[field] = "Unknown"
-
-            except Exception as parsing_error:
-                print_warning(f"Error parsing analysis results: {str(parsing_error)}")
-                findings = [
-                    {
-                        "severity": "Medium",
-                        "category": "Quality",
-                        "description": "Analysis completed but results parsing failed",
-                        "location": "N/A",
-                        "recommendation": "Please check the scan logs for details",
-                    }
-                ]
-
+            # Parse and validate findings
+            findings = self.parse_findings(response)
             return findings
+
+        except Exception as e:
+            print_warning(f"Batch analysis failed: {str(e)}")
+            return []
+
+    def parse_findings(self, response: str) -> List[Dict]:
+        """Parse and validate analysis findings"""
+        try:
+            if isinstance(response, str):
+                import re
+                import json
+
+                # Try to find JSON structure
+                json_str = re.search(r"\[.*\]|\{.*\}", response.replace("\n", ""))
+                if json_str:
+                    findings = json.loads(json_str.group())
+                else:
+                    return []
+
+            else:
+                findings = response
+
+            if isinstance(findings, dict):
+                findings = [findings]
+
+            # Validate and normalize findings
+            normalized_findings = []
+            for finding in findings:
+                if all(
+                    key in finding for key in ["severity", "category", "description"]
+                ):
+                    normalized_findings.append(
+                        {
+                            "severity": finding.get("severity", "Unknown"),
+                            "category": finding.get("category", "Unknown"),
+                            "description": finding.get("description", ""),
+                            "location": finding.get("location", "N/A"),
+                            "recommendation": finding.get("recommendation", ""),
+                        }
+                    )
+
+            return normalized_findings
+
+        except Exception as e:
+            print_warning(f"Failed to parse findings: {str(e)}")
+            return []
+
+    async def analyze_repo(self) -> List[Dict]:
+        """Analyze repository in batches"""
+        try:
+            # Get all analyzable files
+            print_info("Starting repository analysis...")
+            all_files = await self.get_repo_files()
+            if not all_files:
+                print_warning("No analyzable files found in repository")
+                return []
+
+            # Split into batches
+            batches = self.chunk_files(all_files)
+            print_info(f"Processing {len(batches)} batches of files...")
+            all_findings = []
+
+            with Progress() as progress:
+                analyze_task = progress.add_task(
+                    "[green]Analyzing files...", total=len(batches)
+                )
+
+                # Process each batch
+                for i, batch in enumerate(batches, 1):
+                    print_info(
+                        f"Analyzing batch {i}/{len(batches)} ({len(batch)} files)"
+                    )
+                    batch_findings = await self.analyze_batch(batch)
+                    all_findings.extend(batch_findings)
+                    progress.update(analyze_task, advance=1)
+
+            return all_findings
 
         except Exception as e:
             print_error(f"Analysis failed: {str(e)}")
@@ -200,19 +258,45 @@ class RepoScanner:
             ]
 
 
-def print_warning(message: str) -> None:
-    """Print a warning message"""
-    console.print(f"[yellow]WARNING:[/yellow] {message}")
+def display_results(findings: List[Dict], output_format: Optional[str]) -> None:
+    """Display scan results in specified format"""
+    if output_format == "json":
+        import json
 
+        console.print(json.dumps(findings, indent=2))
+    else:
+        table = Table(title="Scan Results")
+        table.add_column("Severity", style="bold")
+        table.add_column("Category", style="cyan")
+        table.add_column("Issue", style="red")
+        table.add_column("Location")
+        table.add_column("Recommendation", style="green")
 
-def print_error(message: str) -> None:
-    """Print an error message"""
-    console.print(f"[red]ERROR:[/red] {message}")
+        for finding in findings:
+            table.add_row(
+                finding["severity"],
+                finding["category"],
+                finding["description"],
+                finding["location"],
+                finding["recommendation"],
+            )
 
+        console.print("\n")
+        console.print(table)
 
-def print_success(message: str) -> None:
-    """Print a success message"""
-    console.print(f"[green]SUCCESS:[/green] {message}")
+    # Print summary
+    total_issues = len(findings)
+    severity_counts = {
+        "critical": sum(1 for f in findings if f["severity"].lower() == "critical"),
+        "high": sum(1 for f in findings if f["severity"].lower() == "high"),
+        "medium": sum(1 for f in findings if f["severity"].lower() == "medium"),
+        "low": sum(1 for f in findings if f["severity"].lower() == "low"),
+    }
+
+    print_success(f"\nScan completed!")
+    console.print(f"Found {total_issues} issues:")
+    for severity, count in severity_counts.items():
+        console.print(f"- {severity.capitalize()}: {count}")
 
 
 @app.command()
@@ -221,103 +305,52 @@ def run(
         None,
         "--github-token",
         "-t",
-        help="GitHub personal access token (can also be set via GITHUB_TOKEN environment variable)",
+        help="GitHub personal access token",
         envvar="GITHUB_TOKEN",
     ),
     repo_name: str = typer.Option(
         ..., "--repo", "-r", help="Repository name in format 'owner/repo'"
     ),
+    max_file_size: int = typer.Option(
+        100000, "--max-file-size", help="Maximum file size to analyze (bytes)"
+    ),
+    files_per_batch: int = typer.Option(
+        5, "--files-per-batch", help="Number of files to analyze per batch"
+    ),
     category: Optional[str] = typer.Option(
-        None,
-        "--category",
-        "-c",
-        help="Filter results by category (security/quality/data)",
+        None, "--category", "-c", help="Filter results by category"
     ),
     severity: Optional[str] = typer.Option(
-        None,
-        "--severity",
-        "-s",
-        help="Filter results by severity (critical/high/medium/low)",
+        None, "--severity", "-s", help="Filter results by severity"
     ),
     output: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output format (table/json)"
     ),
 ) -> None:
-    """
-    Run a security and code quality scan on a GitHub repository
-    """
+    """Run a security and code quality scan on a GitHub repository"""
     try:
-        # Initialize scanner
-        scanner = RepoScanner(github_token=github_token, repo_name=repo_name)
+        scanner = RepoScanner(
+            github_token=github_token,
+            repo_name=repo_name,
+            max_file_size=max_file_size,
+            max_files_per_batch=files_per_batch,
+        )
 
-        with Progress() as progress:
-            # Create progress tasks
-            repo_task = progress.add_task(
-                "[cyan]Gathering repository information...", total=100
-            )
-            analysis_task = progress.add_task("[green]Analyzing code...", total=100)
-
-            # Gather repository information
-            repo_info = asyncio.run(scanner.get_repo_info())
-            progress.update(repo_task, completed=100)
-
-            # Analyze repository
-            findings = asyncio.run(scanner.analyze_repo(repo_info))
-            progress.update(analysis_task, completed=100)
+        findings = asyncio.run(scanner.analyze_repo())
 
         # Filter findings
         if category:
             findings = [
-                f for f in findings if f.get("category", "").lower() == category.lower()
+                f for f in findings if f["category"].lower() == category.lower()
             ]
         if severity:
             findings = [
-                f for f in findings if f.get("severity", "").lower() == severity.lower()
+                f for f in findings if f["severity"].lower() == severity.lower()
             ]
 
         # Display results
         if findings:
-            if output == "json":
-                import json
-
-                console.print(json.dumps(findings, indent=2))
-            else:
-                table = Table(title="Scan Results")
-                table.add_column("Severity", style="bold")
-                table.add_column("Category", style="cyan")
-                table.add_column("Issue", style="red")
-                table.add_column("Location")
-                table.add_column("Recommendation", style="green")
-
-                for finding in findings:
-                    table.add_row(
-                        finding.get("severity", "Unknown"),
-                        finding.get("category", "Unknown"),
-                        finding.get("description", ""),
-                        finding.get("location", ""),
-                        finding.get("recommendation", ""),
-                    )
-
-                console.print("\n")
-                console.print(table)
-
-            # Print summary
-            total_issues = len(findings)
-            critical = sum(
-                1 for f in findings if f.get("severity", "").lower() == "critical"
-            )
-            high = sum(1 for f in findings if f.get("severity", "").lower() == "high")
-            medium = sum(
-                1 for f in findings if f.get("severity", "").lower() == "medium"
-            )
-            low = sum(1 for f in findings if f.get("severity", "").lower() == "low")
-
-            print_success(f"\nScan completed!")
-            console.print(f"Found {total_issues} issues:")
-            console.print(f"- Critical: {critical}")
-            console.print(f"- High: {high}")
-            console.print(f"- Medium: {medium}")
-            console.print(f"- Low: {low}")
+            display_results(findings, output)
         else:
             print_success("\nScan completed! No issues found.")
 
