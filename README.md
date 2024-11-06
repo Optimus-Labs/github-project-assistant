@@ -24,6 +24,67 @@ export GROQ_API_KEY="your-groq-api-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
+## Installing the CLI Tool in your OS
+
+### Windows
+
+1. **Create a Virtual Environment (Optional)**:
+
+   - It's recommended to use a virtual environment to isolate the GPA dependencies from your system Python installation.
+   - Open the command prompt and run the following commands:
+     ```
+     python -m venv gpa-venv
+     gpa-venv\Scripts\activate
+     ```
+
+2. **Install the Package**:
+
+   - Download the latest release from the [GitHub repository](https://github.com/Optimus-Labs/github-project-assistant/releases).
+   - Unzip the downloaded file and navigate to the project directory.
+   - Run the following command to install the package:
+     ```
+     pip install gpa-0.1.0-py3-none-any.whl
+     ```
+
+3. **Set up Environment Variables**:
+   - Open the Windows environment variables editor (e.g., search for "environment variables" in the start menu).
+   - Add the following variables:
+     - `GROQ_API_KEY`: Your Groq API key
+     - `GITHUB_TOKEN`: Your GitHub personal access token
+
+Now you can use the `gpa` command from anywhere in your Windows command prompt or PowerShell.
+
+### Linux/macOS
+
+1. **Create a Virtual Environment (Optional)**:
+
+   - It's recommended to use a virtual environment to isolate the GPA dependencies from your system Python installation.
+   - Open a terminal and run the following commands:
+     ```
+     python3 -m venv gpa-venv
+     source gpa-venv/bin/activate
+     ```
+
+2. **Install the Package**:
+
+   - Download the latest release from the [GitHub repository](https://github.com/Optimus-Labs/github-project-assistant/releases).
+   - Unzip the downloaded file and navigate to the project directory.
+   - Run the following command to install the package:
+     ```
+     pip install gpa-0.1.0-py3-none-any.whl
+     ```
+
+3. **Set up Environment Variables**:
+   - Open your shell configuration file (e.g., `.bashrc`, `.zshrc`) in a text editor.
+   - Add the following lines:
+     ```
+     export GROQ_API_KEY="your-groq-api-key"
+     export GITHUB_TOKEN="your-github-token"
+     ```
+   - Save the file and run `source ~/.bashrc` (or the appropriate command for your shell) to apply the changes.
+
+Now you can use the `gpa` command from anywhere in your terminal.
+
 ## Usage
 
 ### Commit Management
