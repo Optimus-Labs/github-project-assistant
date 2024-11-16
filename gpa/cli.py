@@ -1,4 +1,3 @@
-from os import name
 import typer
 from rich.console import Console
 from . import __version__
