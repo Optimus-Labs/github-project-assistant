@@ -1,143 +1,207 @@
 import typer
 import asyncio
-from typing import Optional, List
+import uvicorn
+import markdown2
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from ..services.git_service import GitService
-from ..services.github_service import GitHubService
-from ..services.groq_service import GroqService
+import subprocess
+import tempfile
+import webbrowser
+import threading
+from typing import Optional
+import os
+
 from ..services.file_service import FileService
+from ..services.doc_service import GitService
+from ..services.groq_service import GroqService
 from ..utils.formatting import print_success, print_error, print_warning, confirm_action
 
 app = typer.Typer()
 
 
-@app.command()
-def readme(
-    output: str = typer.Option("README.md", "--output", "-o", help="Output file path"),
-    preview: bool = typer.Option(
-        False, "--preview", "-p", help="Preview without saving"
-    ),
-) -> None:
-    """
-    Generate or update project README file.
-    """
-    try:
-        file_service = FileService()
-        git_service = GitService()
-        groq_service = GroqService()
+class ReadmePreviewServer:
+    def __init__(self, readme_path: str):
+        """
+        Initialize the README preview server with live editing capabilities.
 
-        # Get project files and git info
-        project_files = file_service.get_project_files([".py", ".md", ".txt"])
+        :param readme_path: Path to the README.md file
+        """
+        self.readme_path = Path(readme_path)
+        self.fastapi_app = FastAPI()
 
-        # Safely get git information with fallbacks
-        git_info = {}
-        try:
-            repo = git_service.repo
-            git_info = {
-                "description": getattr(repo, "description", None)
-                or "No description available",
-                "default_branch": getattr(repo, "default_branch", None) or "main",
-                "topics": repo.get_topics() if hasattr(repo, "get_topics") else [],
-            }
-        except Exception as e:
-            print_warning(f"Could not fetch complete git information: {str(e)}")
-            git_info = {
-                "description": "No description available",
-                "default_branch": "main",
-                "topics": [],
-            }
+        # Create a temporary static directory if it doesn't exist
+        self.static_dir = Path(__file__).parent / "static"
+        self.static_dir.mkdir(exist_ok=True)
 
-        # Generate README
-        content = asyncio.run(groq_service.generate_readme(project_files, git_info))
+        self.setup_routes()
 
-        if preview:
-            print_success("\nGenerated README:")
-            typer.echo(content)
-            return
+    def setup_routes(self):
+        """
+        Set up FastAPI routes for README preview and editing.
+        """
 
-        if confirm_action(f"\nSave README to {output}?"):
-            if file_service.save_file(output, content):
-                print_success(f"README saved to {output}")
-            else:
-                print_error("Failed to save README")
-
-    except Exception as e:
-        print_error(f"An error occurred: {str(e)}")
-        raise typer.Exit(1)
-
-
-@app.command()
-def suggest(
-    path: str = typer.Argument(..., help="Path to documentation file"),
-    diff: Optional[str] = typer.Option(None, "--diff", "-d", help="Path to diff file"),
-) -> None:
-    """
-    Suggest improvements for existing documentation.
-    """
-    try:
-        file_service = FileService()
-        git_service = GitService()
-        groq_service = GroqService()
-
-        # Get current documentation
-        docs = Path(path).read_text()
-
-        # Get code changes
-        if diff:
-            changes = Path(diff).read_text()
-        else:
+        @self.fastapi_app.websocket("/ws")
+        async def websocket_endpoint(websocket: WebSocket):
+            await websocket.accept()
             try:
-                changes = git_service.repo.git.diff()
-            except Exception:
-                print_warning("Could not fetch git diff, proceeding with empty changes")
-                changes = ""
+                while True:
+                    # Receive markdown content from client
+                    data = await websocket.receive_text()
 
-        # Generate suggestions
-        suggestions = asyncio.run(groq_service.suggest_doc_improvements(docs, changes))
+                    # Save the updated content to the file
+                    self.readme_path.write_text(data)
 
-        print_success(f"\nSuggested improvements for {path}:")
-        typer.echo(suggestions)
+                    # Convert markdown to HTML for preview
+                    html_content = markdown2.markdown(
+                        data, extras=["tables", "fenced-code-blocks"]
+                    )
 
-    except Exception as e:
-        print_error(f"An error occurred: {str(e)}")
-        raise typer.Exit(1)
+                    # Send back the HTML preview
+                    await websocket.send_text(html_content)
+
+            except WebSocketDisconnect:
+                print_warning("WebSocket connection closed")
+
+        @self.fastapi_app.get("/")
+        async def serve_editor():
+            """
+            Serve the live markdown editor and preview page.
+            """
+            return HTMLResponse(content=self.get_editor_html())
+
+        # Serve static files from a directory that is guaranteed to exist
+        self.fastapi_app.mount(
+            "/static", StaticFiles(directory=self.static_dir), name="static"
+        )
+
+    def get_editor_html(self) -> str:
+        """
+        Generate the HTML for the live markdown editor.
+
+        :return: HTML content with embedded JavaScript for live editing
+        """
+        # Create a simple CSS file in the static directory for custom styles
+        (self.static_dir / "styles.css").write_text("""
+        body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji; }
+        .container { display: flex; height: 100vh; }
+        #editor, #preview { width: 50%; padding: 10px; box-sizing: border-box; }
+        #editor { background: #f4f4f4; resize: none; }
+        #preview { background: white; overflow-y: auto; }
+        .markdown-body { padding: 15px; }
+        """)
+
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>README Preview</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.1.0/github-markdown.min.css">
+            <link rel="stylesheet" href="/static/styles.css">
+        </head>
+        <body>
+            <div class="container">
+                <textarea id="editor" rows="30">{self.readme_path.read_text()}</textarea>
+                <div id="preview" class="markdown-body"></div>
+            </div>
+            <script>
+                const socket = new WebSocket('ws://' + window.location.host + '/ws');
+                const editor = document.getElementById('editor');
+                const preview = document.getElementById('preview');
+                
+                // Initial render
+                preview.innerHTML = marked.parse(editor.value);
+                
+                editor.addEventListener('input', () => {{
+                    socket.send(editor.value);
+                }});
+                
+                socket.onmessage = (event) => {{
+                    preview.innerHTML = event.data;
+                }};
+            </script>
+            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        </body>
+        </html>
+        """
+
+    def open_browser(self, port: int):
+        """
+        Open the default web browser to the preview server.
+
+        :param port: Port number the server is running on
+        """
+        webbrowser.open(f"http://localhost:{port}")
+
+    def run(self, host: str = "127.0.0.1", port: int = 8000):
+        """
+        Run the preview server.
+
+        :param host: Host to bind the server
+        :param port: Port to run the server on
+        """
+        # Use threading to open browser after server starts
+        threading.Thread(target=self.open_browser, args=(port,), daemon=True).start()
+
+        # Run the server
+        uvicorn.run(self.fastapi_app, host=host, port=port)
 
 
 @app.command()
-def generate(
-    path: str = typer.Argument(..., help="Path to Python file"),
-    style: str = typer.Option(
-        "google", "--style", "-s", help="Documentation style (google/numpy/sphinx)"
-    ),
-    preview: bool = typer.Option(
-        False, "--preview", "-p", help="Preview without saving"
+def preview(
+    path: str = typer.Option("README.md", "--path", "-p", help="Path to README file"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the server"),
+    port: int = typer.Option(8000, "--port", help="Port to run the server"),
+    editor: Optional[str] = typer.Option(
+        None, "--editor", "-e", help="Open with specific text editor"
     ),
 ) -> None:
     """
-    Generate code documentation for Python files.
+    Preview and edit README with live server and optional text editor.
+
+    Supports live markdown rendering and optional external text editor integration.
     """
     try:
-        file_service = FileService()
-        groq_service = GroqService()
+        # Ensure README exists, generate if not
+        readme_path = Path(path)
+        if not readme_path.exists():
+            file_service = FileService()
+            git_service = GitService()
+            groq_service = GroqService()
 
-        # Read Python file
-        code = Path(path).read_text()
+            # Get project files and git info
+            project_files = file_service.get_project_files([".py", ".md", ".txt"])
 
-        # Generate documentation
-        docs = asyncio.run(groq_service.generate_code_docs(code, style))
+            try:
+                git_info = git_service.get_repo_info()
+            except Exception:
+                git_info = {
+                    "description": "No description available",
+                    "default_branch": "main",
+                    "topics": [],
+                }
 
-        if preview:
-            print_success(f"\nGenerated documentation ({style} style):")
-            typer.echo(docs)
-            return
+            # Generate README
+            content = asyncio.run(groq_service.generate_readme(project_files, git_info))
 
-        # Save to file with _docs suffix
-        output_path = str(Path(path).with_suffix("")) + "_docs.py"
-        if confirm_action(f"\nSave documentation to {output_path}?"):
-            if file_service.save_file(output_path, docs):
-                print_success(f"Documentation saved to {output_path}")
-            else:
-                print_error("Failed to save documentation")
+            # Save generated README
+            readme_path.write_text(content)
+            print_success(f"Generated README at {path}")
+
+        # Open with external editor if specified
+        if editor:
+            try:
+                subprocess.Popen([editor, str(readme_path)])
+                print_success(f"Opened {path} in {editor}")
+            except Exception as e:
+                print_error(f"Failed to open with {editor}: {e}")
+
+        # Start preview server
+        preview_server = ReadmePreviewServer(str(readme_path))
+        print_success(f"Starting README preview server at http://{host}:{port}")
+        print_warning("Press Ctrl+C to stop the server")
+        preview_server.run(host, port)
 
     except Exception as e:
         print_error(f"An error occurred: {str(e)}")
