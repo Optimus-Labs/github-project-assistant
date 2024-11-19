@@ -4,3 +4,4 @@ services/__pycache__
 utils/__pycache__
 gpa.egg-info
 dist
+venv
