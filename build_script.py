@@ -12,6 +12,8 @@ def build_package():
         shutil.rmtree("dist")
     if os.path.exists("build"):
         shutil.rmtree("build")
+    if os.path.exists("src/gpa.egg-info"):
+        shutil.rmtree("src/gpa.egg-info")
 
     # Create dist directory
     os.makedirs("dist", exist_ok=True)
@@ -23,6 +25,7 @@ def build_package():
             "-m",
             "pip",
             "install",
+            "--upgrade",
             "build",
             "wheel",
             "setuptools>=42",
@@ -46,6 +49,7 @@ def build_package():
                 "--wheel",
                 "--outdir",
                 "dist/",
+                "--no-isolation",  # This ensures our local src directory is used
             ]
         )
     except subprocess.CalledProcessError as e:
@@ -83,7 +87,7 @@ def build_package():
 SCRIPT_DIR=$(dirname "$(readlink -f "$0" || echo "$0")")
 INSTALL_DIR=$(dirname "$SCRIPT_DIR")
 export PYTHONPATH="$INSTALL_DIR/lib/{wheel_file.name}"
-# Install dependencies if not already installed
+# Ensure dependencies are installed
 python3 -m pip install --user typer rich groq GitPython PyGithub
 python3 -m gpa "$@"
 """)

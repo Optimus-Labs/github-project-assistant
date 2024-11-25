@@ -20,9 +20,11 @@ dependencies = [
 [project.scripts]
 gpa = "gpa.cli:app"
 
-[project.entry-points."console_scripts"]
-gpa = "gpa.cli:app"
-
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["gpa"]
+packages = [
+    "gpa",
+    "gpa.commands",
+    "gpa.services",
+    "gpa.utils"
+]
