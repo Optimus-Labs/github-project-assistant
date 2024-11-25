@@ -109,13 +109,16 @@ install_gpa() {
   # Create installation directory
   sudo mkdir -p /opt/gpa
 
-  # Modified copy command to handle single binary or directory structure
-  if [ -f "${tmp_dir}/gpa" ]; then
-    # If gpa is a single binary
-    sudo cp "${tmp_dir}/gpa" /opt/gpa/
+  # Handle versioned directory structure
+  local extracted_dir="gpa-${VERSION}-${os_arch}"
+  if [ -d "${tmp_dir}/${extracted_dir}" ]; then
+    echo -e "${BLUE}Copying files from ${extracted_dir}...${NC}"
+    sudo cp -r "${tmp_dir}/${extracted_dir}"/* /opt/gpa/
   else
-    # If gpa is in a directory structure
-    sudo cp -r "${tmp_dir}"/* /opt/gpa/
+    echo -e "${RED}Expected directory ${extracted_dir} not found${NC}"
+    cd - >/dev/null
+    rm -rf "${tmp_dir}"
+    exit 1
   fi
 
   if [ $? -ne 0 ]; then
@@ -125,11 +128,20 @@ install_gpa() {
     exit 1
   fi
 
-  # Ensure proper permissions
-  sudo chmod +x /opt/gpa/gpa
+  # Find and set permissions for the gpa binary
+  if [ -f "/opt/gpa/bin/gpa" ]; then
+    sudo chmod +x /opt/gpa/bin/gpa
+    sudo ln -sf /opt/gpa/bin/gpa /usr/local/bin/gpa
+  elif [ -f "/opt/gpa/gpa" ]; then
+    sudo chmod +x /opt/gpa/gpa
+    sudo ln -sf /opt/gpa/gpa /usr/local/bin/gpa
+  else
+    echo -e "${RED}Could not find gpa binary in /opt/gpa${NC}"
+    cd - >/dev/null
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
 
-  # Create symlink
-  sudo ln -sf /opt/gpa/gpa /usr/local/bin/gpa
   if [ $? -ne 0 ]; then
     echo -e "${RED}Failed to create symlink${NC}"
     cd - >/dev/null
