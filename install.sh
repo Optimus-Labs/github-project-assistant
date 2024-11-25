@@ -1,17 +1,21 @@
 #!/bin/bash
 set -e
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
 # Version
 VERSION="0.1.0"
+
 # Print banner
 echo -e "${BLUE}================================${NC}"
 echo -e "${BLUE}GitHub Project Assistant (GPA)${NC}"
 echo -e "${BLUE}Installation Script v${VERSION}${NC}"
 echo -e "${BLUE}================================${NC}"
+
 # Detect OS and architecture
 detect_os() {
   local os
@@ -29,6 +33,7 @@ detect_os() {
   esac
   echo "$os-$arch"
 }
+
 # Detect package manager for Linux
 detect_package_manager() {
   if [ -x "$(command -v apt-get)" ]; then
@@ -41,6 +46,7 @@ detect_package_manager() {
     echo "unknown"
   fi
 }
+
 # Install dependencies
 install_dependencies() {
   echo -e "${BLUE}Installing dependencies...${NC}"
@@ -70,6 +76,7 @@ install_dependencies() {
     esac
   fi
 }
+
 # Download and install GPA
 install_gpa() {
   local os_arch=$(detect_os)
@@ -77,19 +84,23 @@ install_gpa() {
   local download_url="https://github.com/Optimus-Labs/github-project-assistant/releases/download/v${VERSION}/gpa-${VERSION}-${os_arch}.tar.gz"
 
   echo -e "${BLUE}Downloading GPA...${NC}"
-  curl -L -o "${tmp_dir}/gpa.tar.gz" "${download_url}" || {
+  if ! curl -L -o "${tmp_dir}/gpa.tar.gz" "${download_url}"; then
     echo -e "${RED}Failed to download from: ${download_url}${NC}"
     echo -e "${RED}HTTP response:${NC}"
     curl -IL "${download_url}"
+    rm -rf "${tmp_dir}"
     exit 1
-  }
+  fi
 
   echo -e "${BLUE}Installing GPA...${NC}"
   cd "${tmp_dir}"
-  tar -xzf gpa.tar.gz || {
+
+  if ! tar -xzf gpa.tar.gz; then
     echo -e "${RED}Failed to extract archive${NC}"
+    cd - >/dev/null
+    rm -rf "${tmp_dir}"
     exit 1
-  }
+  fi
 
   # List contents of tmp_dir for debugging
   echo -e "${BLUE}Extracted contents:${NC}"
@@ -98,22 +109,39 @@ install_gpa() {
   # Create installation directory
   sudo mkdir -p /opt/gpa
 
-  # Copy all files from temp directory (excluding the tar.gz)
-  sudo cp -r "${tmp_dir}"/!(gpa.tar.gz) /opt/gpa/ || {
+  # Modified copy command to handle single binary or directory structure
+  if [ -f "${tmp_dir}/gpa" ]; then
+    # If gpa is a single binary
+    sudo cp "${tmp_dir}/gpa" /opt/gpa/
+  else
+    # If gpa is in a directory structure
+    sudo cp -r "${tmp_dir}"/* /opt/gpa/
+  fi
+
+  if [ $? -ne 0 ]; then
     echo -e "${RED}Failed to copy files to /opt/gpa/${NC}"
+    cd - >/dev/null
+    rm -rf "${tmp_dir}"
     exit 1
-  }
+  fi
+
+  # Ensure proper permissions
+  sudo chmod +x /opt/gpa/gpa
 
   # Create symlink
-  sudo ln -sf /opt/gpa/gpa /usr/local/bin/gpa || {
+  sudo ln -sf /opt/gpa/gpa /usr/local/bin/gpa
+  if [ $? -ne 0 ]; then
     echo -e "${RED}Failed to create symlink${NC}"
+    cd - >/dev/null
+    rm -rf "${tmp_dir}"
     exit 1
-  }
+  fi
 
   # Cleanup
   cd - >/dev/null
   rm -rf "${tmp_dir}"
 }
+
 # Verify installation
 verify_installation() {
   if command -v gpa >/dev/null 2>&1; then
@@ -124,6 +152,7 @@ verify_installation() {
     exit 1
   fi
 }
+
 # Main installation process
 main() {
   install_dependencies
@@ -135,5 +164,6 @@ main() {
   echo "   export GITHUB_TOKEN='your-github-token'"
   echo "2. Run 'gpa --help' to see available commands"
 }
+
 # Run main installation
 main
