@@ -75,6 +75,10 @@ install_dependencies() {
       ;;
     esac
   fi
+
+  # Install Python dependencies
+  echo -e "${BLUE}Installing Python dependencies...${NC}"
+  pip3 install --user typer rich groq GitPython PyGithub
 }
 
 # Download and install GPA
@@ -121,10 +125,12 @@ install_gpa() {
     exit 1
   fi
 
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to copy files to /opt/gpa/${NC}"
-    cd - >/dev/null
-    rm -rf "${tmp_dir}"
+  # Install wheel with dependencies
+  if [ -f "/opt/gpa/lib/"*.whl ]; then
+    echo -e "${BLUE}Installing Python package and dependencies...${NC}"
+    pip3 install --user /opt/gpa/lib/*.whl
+  else
+    echo -e "${RED}Could not find wheel file in /opt/gpa/lib${NC}"
     exit 1
   fi
 
@@ -137,13 +143,6 @@ install_gpa() {
     sudo ln -sf /opt/gpa/gpa /usr/local/bin/gpa
   else
     echo -e "${RED}Could not find gpa binary in /opt/gpa${NC}"
-    cd - >/dev/null
-    rm -rf "${tmp_dir}"
-    exit 1
-  fi
-
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to create symlink${NC}"
     cd - >/dev/null
     rm -rf "${tmp_dir}"
     exit 1

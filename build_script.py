@@ -27,6 +27,12 @@ def build_package():
             "wheel",
             "setuptools>=42",
             "twine",
+            # Install package dependencies
+            "typer>=0.9.0",
+            "rich>=13.0.0",
+            "groq>=0.4.0",
+            "GitPython>=3.1.0",
+            "PyGithub>=2.1.1",
         ]
     )
 
@@ -58,9 +64,7 @@ def build_package():
 
     for os_name, arch in platforms:
         # Create directory structure
-        pkg_version = os.getenv(
-            "VERSION", "0.1.0"
-        )  # Default to 0.1.0 if VERSION not set
+        pkg_version = os.getenv("VERSION", "0.1.0")
         dist_dir = Path(f"dist/gpa-{pkg_version}-{os_name}-{arch}")
         bin_dir = dist_dir / "bin"
         lib_dir = dist_dir / "lib"
@@ -79,6 +83,8 @@ def build_package():
 SCRIPT_DIR=$(dirname "$(readlink -f "$0" || echo "$0")")
 INSTALL_DIR=$(dirname "$SCRIPT_DIR")
 export PYTHONPATH="$INSTALL_DIR/lib/{wheel_file.name}"
+# Install dependencies if not already installed
+python3 -m pip install --user typer rich groq GitPython PyGithub
 python3 -m gpa "$@"
 """)
 
