@@ -44,7 +44,6 @@ def build_package():
         )
     except subprocess.CalledProcessError as e:
         print(f"Build failed with error: {e}")
-        # Print pip list for debugging
         subprocess.run([sys.executable, "-m", "pip", "list"])
         raise
 
@@ -80,7 +79,7 @@ def build_package():
 SCRIPT_DIR=$(dirname "$(readlink -f "$0" || echo "$0")")
 INSTALL_DIR=$(dirname "$SCRIPT_DIR")
 export PYTHONPATH="$INSTALL_DIR/lib/{wheel_file.name}"
-exec python3 -m gpa "$@"
+python3 -m gpa "$@"
 """)
 
         # Make executable
