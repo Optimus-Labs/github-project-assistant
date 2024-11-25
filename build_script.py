@@ -17,10 +17,36 @@ def build_package():
     os.makedirs("dist", exist_ok=True)
 
     # Install build dependencies
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "build", "wheel"])
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "build",
+            "wheel",
+            "setuptools>=42",
+            "twine",
+        ]
+    )
 
-    # Build wheel
-    subprocess.check_call([sys.executable, "-m", "build", "--wheel", "--no-isolation"])
+    # Build wheel with isolation to ensure clean environment
+    try:
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "build",
+                "--wheel",
+                "--outdir",
+                "dist/",
+            ]
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Build failed with error: {e}")
+        # Print pip list for debugging
+        subprocess.run([sys.executable, "-m", "pip", "list"])
+        raise
 
     # Create platform-specific packages
     platforms = [
@@ -29,23 +55,29 @@ def build_package():
         ("darwin", "arm64"),
     ]
 
+    wheel_file = next(Path("dist").glob("*.whl"))
+
     for os_name, arch in platforms:
         # Create directory structure
-        dist_dir = Path(f"dist/gpa-{os.getenv('VERSION')}-{os_name}-{arch}")
+        pkg_version = os.getenv(
+            "VERSION", "0.1.0"
+        )  # Default to 0.1.0 if VERSION not set
+        dist_dir = Path(f"dist/gpa-{pkg_version}-{os_name}-{arch}")
         bin_dir = dist_dir / "bin"
-        bin_dir.mkdir(parents=True)
+        lib_dir = dist_dir / "lib"
+
+        # Create directories
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        lib_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy wheel to lib directory
-        wheel_file = next(Path("dist").glob("*.whl"))
-        lib_dir = dist_dir / "lib"
-        lib_dir.mkdir()
         shutil.copy(wheel_file, lib_dir)
 
         # Create executable script
         executable = bin_dir / "gpa"
         with executable.open("w") as f:
             f.write(f"""#!/bin/sh
-SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+SCRIPT_DIR=$(dirname "$(readlink -f "$0" || echo "$0")")
 INSTALL_DIR=$(dirname "$SCRIPT_DIR")
 export PYTHONPATH="$INSTALL_DIR/lib/{wheel_file.name}"
 exec python3 -m gpa "$@"
@@ -55,12 +87,8 @@ exec python3 -m gpa "$@"
         executable.chmod(0o755)
 
         # Create tarball
-        shutil.make_archive(
-            f"dist/gpa-{os.getenv('VERSION')}-{os_name}-{arch}",
-            "gztar",
-            "dist",
-            f"gpa-{os.getenv('VERSION')}-{os_name}-{arch}",
-        )
+        archive_name = f"gpa-{pkg_version}-{os_name}-{arch}"
+        shutil.make_archive(f"dist/{archive_name}", "gztar", "dist", archive_name)
 
 
 if __name__ == "__main__":
