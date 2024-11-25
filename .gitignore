@@ -6,3 +6,5 @@ gpa/commands/static
 gpa.egg-info
 dist
 venv
+build_venv
+build
