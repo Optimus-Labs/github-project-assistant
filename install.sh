@@ -34,19 +34,6 @@ detect_os() {
   echo "$os-$arch"
 }
 
-# Detect package manager for Linux
-detect_package_manager() {
-  if [ -x "$(command -v apt-get)" ]; then
-    echo "apt"
-  elif [ -x "$(command -v yum)" ]; then
-    echo "yum"
-  elif [ -x "$(command -v pacman)" ]; then
-    echo "pacman"
-  else
-    echo "unknown"
-  fi
-}
-
 # Install dependencies
 install_dependencies() {
   echo -e "${BLUE}Installing dependencies...${NC}"
@@ -57,23 +44,17 @@ install_dependencies() {
     fi
     brew install python3
   else
-    local pkg_manager=$(detect_package_manager)
-    case $pkg_manager in
-    apt)
+    if [ -x "$(command -v apt-get)" ]; then
       sudo apt-get update
       sudo apt-get install -y python3 python3-pip
-      ;;
-    yum)
+    elif [ -x "$(command -v yum)" ]; then
       sudo yum install -y python3 python3-pip
-      ;;
-    pacman)
+    elif [ -x "$(command -v pacman)" ]; then
       sudo pacman -Sy python python-pip
-      ;;
-    *)
+    else
       echo -e "${RED}Unsupported package manager. Please install Python 3 manually.${NC}"
       exit 1
-      ;;
-    esac
+    fi
   fi
 }
 
@@ -102,48 +83,33 @@ install_gpa() {
     exit 1
   fi
 
-  # List contents of tmp_dir for debugging
   echo -e "${BLUE}Extracted contents:${NC}"
   ls -la "${tmp_dir}"
 
   # Create installation directory
   sudo mkdir -p /opt/gpa
 
-  # Handle versioned directory structure
-  local extracted_dir="gpa-${VERSION}-${os_arch}"
-  if [ -d "${tmp_dir}/${extracted_dir}" ]; then
-    echo -e "${BLUE}Copying files from ${extracted_dir}...${NC}"
-    sudo cp -r "${tmp_dir}/${extracted_dir}"/* /opt/gpa/
-  else
-    echo -e "${RED}Expected directory ${extracted_dir} not found${NC}"
-    cd - >/dev/null
-    rm -rf "${tmp_dir}"
-    exit 1
-  fi
-
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to copy files to /opt/gpa/${NC}"
-    cd - >/dev/null
-    rm -rf "${tmp_dir}"
-    exit 1
-  fi
-
-  # Find and set permissions for the gpa binary
-  if [ -f "/opt/gpa/bin/gpa" ]; then
+  # Copy files from the correct directory structure
+  local package_dir="gpa-${VERSION}-${os_arch}"
+  if [ -d "${tmp_dir}/${package_dir}" ]; then
+    echo -e "${BLUE}Installing package from ${package_dir}...${NC}"
+    # Remove existing installation if present
+    sudo rm -rf /opt/gpa/*
+    # Copy all files preserving structure
+    sudo cp -R "${tmp_dir}/${package_dir}"/* /opt/gpa/
+    # Ensure bin directory exists
+    if [ ! -d "/opt/gpa/bin" ]; then
+      echo -e "${RED}Binary directory not found in package${NC}"
+      cd - >/dev/null
+      rm -rf "${tmp_dir}"
+      exit 1
+    fi
+    # Make binary executable
     sudo chmod +x /opt/gpa/bin/gpa
+    # Create symlink
     sudo ln -sf /opt/gpa/bin/gpa /usr/local/bin/gpa
-  elif [ -f "/opt/gpa/gpa" ]; then
-    sudo chmod +x /opt/gpa/gpa
-    sudo ln -sf /opt/gpa/gpa /usr/local/bin/gpa
   else
-    echo -e "${RED}Could not find gpa binary in /opt/gpa${NC}"
-    cd - >/dev/null
-    rm -rf "${tmp_dir}"
-    exit 1
-  fi
-
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to create symlink${NC}"
+    echo -e "${RED}Package directory ${package_dir} not found${NC}"
     cd - >/dev/null
     rm -rf "${tmp_dir}"
     exit 1
@@ -158,6 +124,7 @@ install_gpa() {
 verify_installation() {
   if command -v gpa >/dev/null 2>&1; then
     echo -e "${GREEN}GPA has been successfully installed!${NC}"
+    gpa --version || true
     echo -e "${BLUE}You can now use the 'gpa' command.${NC}"
   else
     echo -e "${RED}Installation failed. Please try again or install manually.${NC}"
