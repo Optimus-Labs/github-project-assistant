@@ -172,7 +172,8 @@ main() {
   echo -e "\n${BLUE}Next steps:${NC}"
   echo "1. Set up your environment variables:"
   echo "   export GROQ_API_KEY='your-groq-api-key'"
-  echo "   export GITHUB_TOKEN='your-github-token'"
+  echo "   export GITHUB_TOKEN='your-github-token' (prefer classic token)"
+  echo "   In your .zshrc or .bashrc"
   echo "2. Run 'gpa --help' to see available commands"
 }
 
