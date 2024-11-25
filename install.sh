@@ -22,7 +22,7 @@ detect_os() {
   *) echo -e "${RED}Unsupported operating system${NC}" && exit 1 ;;
   esac
   case "$(uname -m)" in
-  x86_64*) arch="x86_64" ;; # Changed from amd64 to x86_64
+  x86_64*) arch="x86_64" ;;
   aarch64*) arch="arm64" ;;
   arm64*) arch="arm64" ;;
   *) echo -e "${RED}Unsupported architecture${NC}" && exit 1 ;;
@@ -75,6 +75,7 @@ install_gpa() {
   local os_arch=$(detect_os)
   local tmp_dir=$(mktemp -d)
   local download_url="https://github.com/Optimus-Labs/github-project-assistant/releases/download/v${VERSION}/gpa-${VERSION}-${os_arch}.tar.gz"
+
   echo -e "${BLUE}Downloading GPA...${NC}"
   curl -L -o "${tmp_dir}/gpa.tar.gz" "${download_url}" || {
     echo -e "${RED}Failed to download from: ${download_url}${NC}"
@@ -82,14 +83,35 @@ install_gpa() {
     curl -IL "${download_url}"
     exit 1
   }
+
   echo -e "${BLUE}Installing GPA...${NC}"
-  tar -xzf "${tmp_dir}/gpa.tar.gz" -C "${tmp_dir}"
+  cd "${tmp_dir}"
+  tar -xzf gpa.tar.gz || {
+    echo -e "${RED}Failed to extract archive${NC}"
+    exit 1
+  }
+
+  # List contents of tmp_dir for debugging
+  echo -e "${BLUE}Extracted contents:${NC}"
+  ls -la "${tmp_dir}"
+
   # Create installation directory
   sudo mkdir -p /opt/gpa
-  sudo cp -r "${tmp_dir}/gpa"/* /opt/gpa/
+
+  # Copy all files from temp directory (excluding the tar.gz)
+  sudo cp -r "${tmp_dir}"/!(gpa.tar.gz) /opt/gpa/ || {
+    echo -e "${RED}Failed to copy files to /opt/gpa/${NC}"
+    exit 1
+  }
+
   # Create symlink
-  sudo ln -sf /opt/gpa/bin/gpa /usr/local/bin/gpa
+  sudo ln -sf /opt/gpa/gpa /usr/local/bin/gpa || {
+    echo -e "${RED}Failed to create symlink${NC}"
+    exit 1
+  }
+
   # Cleanup
+  cd - >/dev/null
   rm -rf "${tmp_dir}"
 }
 # Verify installation
