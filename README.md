@@ -2,6 +2,8 @@
 
 A comprehensive CLI tool for managing GitHub projects, leveraging Groq's AI models for intelligent PR descriptions, commit messages, and issue management.
 
+Checkout the (demo)[https://youtu.be/0S8_xIdYR_E]
+
 ## Installation
 
 1. Clone the repository:
